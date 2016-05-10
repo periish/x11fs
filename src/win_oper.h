@@ -45,3 +45,9 @@ char *event_read(int wid);
 
 char *focused_read(int wid);
 void focused_write(int wid, const char *buf);
+
+char *primary_read(int wid);
+void primary_write(int wid, const char *buf);
+
+char *clipboard_read(int wid);
+void clipboard_write(int wid, const char *buf);

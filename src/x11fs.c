@@ -46,6 +46,8 @@ static const struct x11fs_file x11fs_files[] = {
 	{"/0x*/class",            S_IFREG | 0400, false, false, class_read,           NULL},
 	{"/focused",              S_IFREG | 0600, false, false, focused_read,         focused_write},
 	{"/event",                S_IFREG | 0400, true,  false, event_read,           NULL},
+  {"/primary",              S_IFREG | 0600, false, false, primary_read,         primary_write},
+  {"/clipboard",            S_IFREG | 0600, false, false, clipboard_read,       clipboard_write}, 
 };
 
 //Pull out the id of a window from a path

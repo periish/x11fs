@@ -196,3 +196,19 @@ void focused_write(int wid, const char *buf)
 	(void) wid;
 	focus(strtol(buf, NULL, 16));
 }
+
+char *primary_read(int wid) {
+  return get_clip_selection(wid, "PRIMARY");
+}
+
+void primary_write(int wid, const char *buf) {
+  set_clip_selection(wid, "PRIMARY", buf);
+}
+
+char *clipboard_read(int wid) {
+  return get_clip_selection(wid, "CLIPBOARD");
+}
+
+void clipboard_write(int wid, const char *buf) {
+  set_clip_selection(wid, "CLIPBOARD", buf);
+}

@@ -1,8 +1,13 @@
 #include <xcb/xcb.h>
+#include <xcb/xcb_event.h>
+#include <xcb/xcb_atom.h>
+#include <sys/types.h>
 #include <err.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <xcb/xcb_icccm.h>
 #include "x11fs.h"
@@ -10,6 +15,7 @@
 //Our connection to xcb and our screen
 static xcb_connection_t *conn;
 static xcb_screen_t *scrn;
+static xcb_window_t clip_wid;
 
 //Setup our connection to the X server and get the first screen
 //TODO: Check how this works with multimonitor setups
@@ -20,9 +26,10 @@ X11FS_STATUS xcb_init()
 		warnx("Cannot open display: %s", getenv("DISPLAY"));
 		return X11FS_FAILURE;
 	}
-
+  
 	scrn = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
-	if(!scrn){
+  
+  if(!scrn){
 		warnx("Cannot retrieve screen information");
 		return X11FS_FAILURE;
 	}
@@ -187,7 +194,7 @@ int get_##name(int wid)\
 		wid=scrn->root;\
 	xcb_get_geometry_reply_t *geom_r = get_geom(wid);\
 	if(!geom_r)\
-		return -1;\
+	return -1;\
 	\
 	int name = geom_r->name;\
 	free(geom_r);\
@@ -330,4 +337,111 @@ char *get_events(){
 	}
 
 	return event_string;
+}
+
+xcb_window_t create_clip_window() {
+  clip_wid = xcb_generate_id(conn);
+  uint32_t values[3] = { scrn->black_pixel, 1, XCB_EVENT_MASK_PROPERTY_CHANGE };
+  uint32_t mask = 0; mask |= XCB_CW_BACK_PIXEL; mask |= XCB_CW_OVERRIDE_REDIRECT; mask |= XCB_CW_EVENT_MASK;
+  
+  xcb_create_window(conn, scrn->root_depth, clip_wid, scrn->root, 0, 0, 1, 1, 0, XCB_COPY_FROM_PARENT, scrn->root_visual, mask, values);
+  
+  xcb_map_window(conn, clip_wid);
+  return clip_wid;
+}
+
+char *get_clip_selection(int wid, char * selection) {
+  (void) wid;  
+  xcb_atom_t xsel = xcb_atom_get(conn, selection); 
+  xcb_atom_t utf = xcb_atom_get(conn, "UTF8_STRING");
+  xcb_window_t clip_wid = create_clip_window();  
+
+  /* Request data as a UTF8 string for selection passed in */
+  xcb_convert_selection(conn, clip_wid, xsel, utf, xcb_atom_get(conn, "XSEL_DATA"), XCB_CURRENT_TIME); 
+  xcb_flush(conn);
+  
+  char * data = 0; 
+
+  while (1) {
+    xcb_generic_event_t *e = xcb_wait_for_event(conn); 
+   
+    if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_SELECTION_REQUEST)
+      break;
+
+    if(XCB_EVENT_RESPONSE_TYPE(e) != XCB_SELECTION_NOTIFY) {
+      free(e);
+      continue;
+    }
+    /* Returned from convert selection, if property is none == not UTF8 data, no owner, server had too little space */
+    xcb_selection_notify_event_t * event = (xcb_selection_notify_event_t *) e;
+  
+    /* Wait for the convert selection event, handle, then delete */
+    if (event->property) {
+      xcb_get_property_reply_t * reply;
+      xcb_get_property_cookie_t cookie;
+      cookie = xcb_get_property_unchecked(conn, 0, event->requestor, event->property, utf, 0, UINT32_MAX);
+      reply = xcb_get_property_reply(conn, cookie, 0);   
+      void * value = xcb_get_property_value(reply);
+      
+      xcb_delete_property(conn, event->requestor, event->property);
+
+      if (reply && value) {
+        data = malloc(reply->value_len+1);
+        snprintf(data, reply->value_len+1, "%s", (char * )value);
+      }
+
+      free(e);
+      free(reply);
+      return data; 
+    } else {
+      return data;
+    }
+  }
+  return data;
+}
+
+void set_clip_selection(int wid, char * selection, const char * buf) {
+  (void) buf; (void) wid;
+  
+  pid_t clip_pid = fork();
+  if (clip_pid < 0)
+    exit(EXIT_FAILURE);
+  if (clip_pid == 0) {
+
+    /* set up window */
+    xcb_window_t clip_wid = create_clip_window();
+  
+    /* request ownership */
+    xcb_atom_t xsel = xcb_atom_get(conn, selection);
+    xcb_get_selection_owner_reply_t *owner;
+    xcb_set_selection_owner(conn, clip_wid, xsel, XCB_CURRENT_TIME);
+    owner = xcb_get_selection_owner_reply(conn, xcb_get_selection_owner(conn, xsel), NULL);
+    if (!owner || owner->owner != clip_wid)
+      warnx("Failed to set ownership\n");
+    if (owner) free(owner);
+  
+    /* set the properties, then send event */
+  
+    /* Unleash the daemon! */
+	  // poll for statuses like selection request, selection clear, and such
+    // once the clip ownership is changed, we can exit.  
+	  while(1) {
+     	/* Convert selection indicates that you want the clip from the owner to be yours */
+    	/* A convert request goes to the owner, and they have to handle the event sending the data requested back */
+      
+  	  /* The returning data will be in a selection notify event */
+  	  /* It'll return type none as a property member if it cannot convert the data */
+  	  /* If setselectionowner is called, a selectionclear event will be received indicating that it should clear anything that is highlighted */
+		  /* You send a selection notification as a xcb_send_event */
+  	  /* Owner of selection should send selectionnotify with xsendevent, with an event_mask of 0 */
+  	  /* selection, target, and property members should be set to values received in the selection request event */
+  	  /* property set to none if the conversion couldn't be made */
+  	  /* Requestors delete data, owners delete all other stuff */
+  	  /* Owner should watch the events in requestors `subscribe(wid of requestor)` for notify property events, to make sure that the property was deleted */
+  	  /* Selectionclear event is received after something else becomes owner */
+  	  /* To voluntarily relinquish ownership, set to none and send event, or close the window */
+		  break;
+    }
+  exit(0);
+  }
 }

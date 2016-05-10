@@ -47,3 +47,6 @@ void set_stack_mode(int wid, int position);
 void set_subscription(int wid, int eventmask);
 
 char *get_events();
+
+char *get_clip_selection(int wid, char * selection);
+void set_clip_selection(int wid, char * selection, const char * buf);
