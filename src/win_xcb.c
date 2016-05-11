@@ -2,6 +2,7 @@
 #include <xcb/xcb_event.h>
 #include <xcb/xcb_atom.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <err.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -346,7 +347,6 @@ xcb_window_t create_clip_window() {
   
   xcb_create_window(conn, scrn->root_depth, clip_wid, scrn->root, 0, 0, 1, 1, 0, XCB_COPY_FROM_PARENT, scrn->root_visual, mask, values);
   
-  xcb_map_window(conn, clip_wid);
   return clip_wid;
 }
 
@@ -364,15 +364,15 @@ char *get_clip_selection(int wid, char * selection) {
 
   while (1) {
     xcb_generic_event_t *e = xcb_wait_for_event(conn); 
-   
+    
     if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_SELECTION_REQUEST)
       break;
-
+    
     if(XCB_EVENT_RESPONSE_TYPE(e) != XCB_SELECTION_NOTIFY) {
       free(e);
       continue;
     }
-    /* Returned from convert selection, if property is none == not UTF8 data, no owner, server had too little space */
+    /* Returned from convert selection, if property is none == not UTF8 data, no owner, or server had too little space */
     xcb_selection_notify_event_t * event = (xcb_selection_notify_event_t *) e;
   
     /* Wait for the convert selection event, handle, then delete */
@@ -401,11 +401,13 @@ char *get_clip_selection(int wid, char * selection) {
 }
 
 void set_clip_selection(int wid, char * selection, const char * buf) {
-  (void) buf; (void) wid;
-  
+  (void) wid;
+ 
+  /* kill any old processes */
+  wait(0);
+
   pid_t clip_pid = fork();
-  if (clip_pid < 0)
-    exit(EXIT_FAILURE);
+  /* If error, exit would unmount the fuse system */
   if (clip_pid == 0) {
 
     /* set up window */
@@ -420,28 +422,35 @@ void set_clip_selection(int wid, char * selection, const char * buf) {
       warnx("Failed to set ownership\n");
     if (owner) free(owner);
   
-    /* set the properties, then send event */
-  
     /* Unleash the daemon! */
-	  // poll for statuses like selection request, selection clear, and such
-    // once the clip ownership is changed, we can exit.  
 	  while(1) {
-     	/* Convert selection indicates that you want the clip from the owner to be yours */
-    	/* A convert request goes to the owner, and they have to handle the event sending the data requested back */
+      xcb_generic_event_t *e = xcb_wait_for_event(conn); 
+      /* Requestors delete data, owners delete all other stuff */
       
-  	  /* The returning data will be in a selection notify event */
-  	  /* It'll return type none as a property member if it cannot convert the data */
-  	  /* If setselectionowner is called, a selectionclear event will be received indicating that it should clear anything that is highlighted */
-		  /* You send a selection notification as a xcb_send_event */
-  	  /* Owner of selection should send selectionnotify with xsendevent, with an event_mask of 0 */
-  	  /* selection, target, and property members should be set to values received in the selection request event */
-  	  /* property set to none if the conversion couldn't be made */
-  	  /* Requestors delete data, owners delete all other stuff */
-  	  /* Owner should watch the events in requestors `subscribe(wid of requestor)` for notify property events, to make sure that the property was deleted */
-  	  /* Selectionclear event is received after something else becomes owner */
-  	  /* To voluntarily relinquish ownership, set to none and send event, or close the window */
-		  break;
+      if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_SELECTION_REQUEST) {
+        xcb_selection_request_event_t * ev = (xcb_selection_request_event_t*)e;
+  	    /* selection, target, and property members should be set to values received in the selection request event */
+  	    
+        /* property set to none if the conversion couldn't be made */
+        xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property, xcb_atom_get(conn, "UTF8_STRING"), 32, strlen(buf), buf);
+  	    /* Owner should watch the events in requestors `subscribe(wid of requestor)` for notify property events, to make sure that the property was deleted */
+        xcb_flush(conn);
+        free(e);
+        //break;
+      }
+  
+      if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_SELECTION_CLEAR) {
+        // once the clip ownership is changed, we can exit.  
+  	    /* Selectionclear event is received after something else becomes owner */
+  	    /* Owner of selection should send selectionnotify with xsendevent, with an event_mask of 0 */
+        break;
+      }
+
+      //if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_PROPERTY_NOTIFY)
+        //break;
+
+      free(e);
     }
-  exit(0);
+  _exit(0);
   }
 }

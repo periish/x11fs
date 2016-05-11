@@ -1,4 +1,4 @@
-x11fs X window virtual filesystem
+x11fs X window virtual filesystem - Clipboard version
 =================================
 
 *This is heavily based off wmutils. [Check them out](http://wmutils.io).*
