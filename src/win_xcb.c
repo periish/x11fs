@@ -4,6 +4,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <err.h>
+#include <errno.h>
+#include <syslog.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -64,12 +66,11 @@ int *list_windows()
 	xcb_query_tree_reply_t *tree_r = xcb_query_tree_reply(conn, tree_c, NULL);
 
 	if(!tree_r)
-		warnx("Couldn't find the root window's");
-
+	syslog(LOG_ERR, "Couldn't find the root windows in %s\n", __func__);
 	//Get the array of windows
 	xcb_window_t *xcb_win_list = xcb_query_tree_children(tree_r);
 	if(!xcb_win_list)
-		warnx("Couldn't find the root window's children");
+		syslog(LOG_ERR, "Couldn't find the root windows children in: %s\n", __func__);
 
 	int *win_list = malloc(sizeof(int)*(tree_r->children_len+1));
 	int i;
@@ -88,7 +89,11 @@ static xcb_atom_t xcb_atom_get(xcb_connection_t *conn, char *name)
 {
 	xcb_intern_atom_cookie_t cookie = xcb_intern_atom(conn ,0, strlen(name), name);
 	xcb_intern_atom_reply_t *reply = xcb_intern_atom_reply(conn, cookie, NULL);
-	return !reply ? XCB_ATOM_STRING : reply->atom;
+	if(!reply) {
+		syslog(LOG_ERR, "Unable to get xcb_atom %s in %s\n", name, __func__);
+	return XCB_ATOM_STRING;
+	}
+	return reply->atom;
 }
 
 void close_window(int wid)
@@ -116,7 +121,9 @@ void close_window(int wid)
 		xcb_send_event(conn, 0, wid, XCB_EVENT_MASK_NO_EVENT, (char *)&ev);
 	}else
 		xcb_kill_client(conn, wid);
-	xcb_flush(conn);
+  
+  if (!xcb_flush(conn))
+    syslog(LOG_ERR, "failed to flush connection on %s in %s\n", wid, __func__);
 }
 
 //Get the focused window
@@ -130,8 +137,10 @@ int focused()
 	focus_r = xcb_get_input_focus_reply(conn, focus_c, NULL);
 
 	//Couldn't find the focused window
-	if(!focus_r)
-		return -1;
+	if(!focus_r) {
+		syslog(LOG_ERR, "Failed to find the focused window in %s\n", __func__);
+	return -1;
+  }
 
 	int focused = focus_r->focus;
 	if(focused==scrn->root)
@@ -143,31 +152,50 @@ int focused()
 //Change the focus
 void focus(int wid)
 {
-	xcb_set_input_focus(conn, XCB_INPUT_FOCUS_POINTER_ROOT, wid, XCB_CURRENT_TIME);
-	xcb_flush(conn);
+  xcb_set_input_focus(conn, XCB_INPUT_FOCUS_POINTER_ROOT, wid, XCB_CURRENT_TIME);
+  if(!xcb_flush(conn))
+    syslog(LOG_ERR, "failed to flush connection on %s in %s\n", wid, __func__);
+
 }
 
 //Get the properties of a window (title, class etc)
 static xcb_get_property_reply_t *get_prop(int wid, xcb_atom_t property, xcb_atom_t type)
 {
-	xcb_get_property_cookie_t prop_c = xcb_get_property(conn, 0, wid, property, type, 0L, 32L);
-	return xcb_get_property_reply(conn, prop_c, NULL);
+  xcb_get_property_cookie_t prop_c;
+  prop_c = xcb_get_property(conn, 0, wid, property, type, 0L, 32L);
+  
+	xcb_get_property_reply_t *reply;
+  reply = xcb_get_property_reply(conn, prop_c, NULL);
+  
+  if(!xcb_get_property_value_length(reply))
+    syslog(LOG_ERR, "Failed to get property in %s\n", __func__);
+  return reply;
 }
 
 //Get the geometry of a window
 static xcb_get_geometry_reply_t *get_geom(int wid)
 {
-	xcb_get_geometry_cookie_t geom_c = xcb_get_geometry(conn, wid);
-	return xcb_get_geometry_reply(conn, geom_c, NULL);
+	xcb_get_geometry_cookie_t geom_c;
+  geom_c = xcb_get_geometry(conn, wid);
+  
+  xcb_get_geometry_reply_t *reply;
+  if(!(reply = xcb_get_geometry_reply(conn, geom_c, NULL)))
+    syslog(LOG_ERR, "Failed to get geometry in %s\n", __func__);
+
+  return reply;
 }
 
 //Get the attributes of a window (mapped, ignored etc)
 static xcb_get_window_attributes_reply_t *get_attr(int wid)
 {
-	xcb_get_window_attributes_cookie_t attr_c = xcb_get_window_attributes(conn, wid);
-	return xcb_get_window_attributes_reply(conn, attr_c, NULL);
+	xcb_get_window_attributes_cookie_t attr_c;
+  attr_c = xcb_get_window_attributes(conn, wid);
+  
+  xcb_get_window_attributes_reply_t *reply;
+  if(!(reply = xcb_get_window_attributes_reply(conn, attr_c, NULL)))
+    syslog(LOG_ERR, "Failed to get attribute in %s\n", __func__);
+  return reply;
 }
-
 //Bunch of functions to get and set window properties etc.
 //All should be fairly self explanatory
 
@@ -175,7 +203,8 @@ static xcb_get_window_attributes_reply_t *get_attr(int wid)
 void set_##name(int wid, int arg) {\
 	uint32_t values[] = {arg};\
 	fn(conn, wid, prop, values);\
-	xcb_flush(conn);\
+	if(!xcb_flush(conn))\
+    syslog(LOG_ERR, "Failed to flush connection in %s\n", __func__);\
 }
 
 DEFINE_NORM_SETTER(border_width, xcb_configure_window,         XCB_CONFIG_WINDOW_BORDER_WIDTH);
@@ -210,13 +239,15 @@ DEFINE_GEOM_GETTER(border_width);
 
 int get_mapped(int wid)
 {
-    xcb_get_window_attributes_reply_t *attr_r = get_attr(wid);
-    if(!attr_r)
-        return -1;
+  xcb_get_window_attributes_reply_t *attr_r = get_attr(wid);
+  if(!attr_r) {
+    syslog(LOG_ERR, "Failed to get %s attribute in %s: \n", wid, __func__);  
+    return -1;
+  }
 
-    int map_state = attr_r->map_state;
-    free(attr_r);
-    return map_state == XCB_MAP_STATE_VIEWABLE;
+  int map_state = attr_r->map_state;
+  free(attr_r);
+  return map_state == XCB_MAP_STATE_VIEWABLE;
 }
 
 void set_mapped(int wid, int mapstate)
@@ -363,6 +394,8 @@ char *get_clip_selection(int wid, char * selection) {
   char * data = 0; 
 
   while (1) {
+    /* TODO: Handle INCR target types */
+
     xcb_generic_event_t *e = xcb_wait_for_event(conn); 
     
     if(XCB_EVENT_RESPONSE_TYPE(e) != XCB_SELECTION_NOTIFY) {
@@ -401,71 +434,95 @@ char *get_clip_selection(int wid, char * selection) {
 
 void set_clip_selection(int wid, char * selection, const char * buf) {
   (void) wid;
- 
+   
   /* kill any old processes */
   wait(0);
+  
+  /* atoms we'll need */
+  xcb_atom_t utf = xcb_atom_get(conn, "UTF8_STRING");
+  xcb_atom_t str = xcb_atom_get(conn, "STRING");
+  xcb_atom_t xsel = xcb_atom_get(conn, selection);
+  xcb_atom_t text = xcb_atom_get(conn, "TEXT");
+  xcb_atom_t timestamp = xcb_atom_get(conn, "TIMESTAMP");
+  xcb_atom_t intatom = xcb_atom_get(conn, "INTEGER");  
+  
+  /* set up window */
+  xcb_window_t clip_wid = create_clip_window();
+
+  /* Set up our data */
+  char * data = malloc(sizeof(buf)+1);
+  memcpy(data, buf, sizeof(buf)+1);
+
+  /* request ownership */
+  xcb_get_selection_owner_reply_t *owner;
+  xcb_set_selection_owner(conn, clip_wid, xsel, XCB_CURRENT_TIME);
+  owner = xcb_get_selection_owner_reply(conn, xcb_get_selection_owner(conn, xsel), NULL);
+  if (!owner || owner->owner != clip_wid)
+    syslog(LOG_ERR, "Failed to set ownership in %s\n", __func__);
+  if (owner) free(owner);
+  
+  xcb_flush(conn);
 
   pid_t clip_pid = fork();
+  
   /* If error, exit would unmount the fuse system */
   if (clip_pid == 0) {
     
-    /* Set up our data */
-    char * data = 0;
-    data = malloc(sizeof(buf)+1);
-    memcpy(data, (const void*)buf, sizeof(buf));
-    
-    /* set up window */
-    xcb_window_t clip_wid = create_clip_window();
-
-    /* request ownership */
-    xcb_atom_t xsel = xcb_atom_get(conn, selection);
-    xcb_get_selection_owner_reply_t *owner;
-    xcb_set_selection_owner(conn, clip_wid, xsel, XCB_CURRENT_TIME);
-    owner = xcb_get_selection_owner_reply(conn, xcb_get_selection_owner(conn, xsel), NULL);
-    if (!owner || owner->owner != clip_wid)
-      warnx("Failed to set ownership\n");
-    if (owner) free(owner);
-  
     /* Unleash the daemon! */
 	  while(1) {
       xcb_generic_event_t *e = xcb_wait_for_event(conn); 
-      /* Requestors delete data, owners delete all other stuff */
-      
+       
+      /* Request for our data */
       if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_SELECTION_REQUEST) {
         xcb_selection_request_event_t * ev = (xcb_selection_request_event_t*)e;
         free(e);
-  	    xcb_atom_t utf = xcb_atom_get(conn, "UTF8_STRING");
-        xcb_atom_t str = xcb_atom_get(conn, "STRING");
+
+        syslog(LOG_ERR, "We are here in XCB_SELECTION_REQUEST target %s\n", ev->target);
+        
         if (ev->target == utf) {
           xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property, utf, 8, sizeof(data), data);
         } else if (ev->target == str) {
           xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property, str, 8, sizeof(data), data);
-        } else if (ev->target == xcb_atom_get(conn, "TIMESTAMP")) { 
-          xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property, xcb_atom_get(conn, "INTEGER"), 32, sizeof(ev->time), (const char *)ev->time);
+        }  else if (ev->target == text) {
+          xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property,  str, 8, sizeof(data), data);
+        } else if (ev->target == timestamp) { 
+          xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property, intatom, 32, 1, (const char *)ev->time);
         }
+
         xcb_flush(conn);
-        xcb_send_event(conn, 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (char*) &ev);
-        free(e); free(ev);
+        free(ev);
       }
-  
+
+      /* Request for ownership */
       if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_SELECTION_CLEAR) {
         xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)e;
         free(e);
-        if (ev->selection == xsel)
+        syslog(LOG_ERR, "We are here XCB_SELECTION_CLEAR\n");
+        if (ev->selection == xsel) {
           break;
+        }
       }
-    
+
       if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_PROPERTY_NOTIFY) {
-        //xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)e;
-        //if (ev->state != XCB_PROPERTY_DELETE) { 
-          //free(e); free(ev);
-        //}
-        /* INCR stuff here! */
+        xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)e;
+        free(e);
+        if (ev->state == XCB_PROPERTY_DELETE) { 
+          syslog(LOG_ERR, "This is a delete event\n");
+          xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->window, ev->atom, xsel, utf, 0, (const void *)0); 
+          xcb_flush(conn);
+          free(ev);
+        }
       }
-
-
+      
+      if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_SELECTION_NOTIFY) {
+        syslog(LOG_ERR, "This is a selection notify event\n");
+        free(e);
+      }
+      
       free(e);
     }
+
+    /* Clean up */
     xcb_destroy_window(conn, clip_wid);
     _exit(0);
   }
