@@ -365,9 +365,6 @@ char *get_clip_selection(int wid, char * selection) {
   while (1) {
     xcb_generic_event_t *e = xcb_wait_for_event(conn); 
     
-    if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_SELECTION_REQUEST)
-      break;
-    
     if(XCB_EVENT_RESPONSE_TYPE(e) != XCB_SELECTION_NOTIFY) {
       free(e);
       continue;
@@ -379,12 +376,11 @@ char *get_clip_selection(int wid, char * selection) {
     if (event->property) {
       xcb_get_property_reply_t * reply;
       xcb_get_property_cookie_t cookie;
-      cookie = xcb_get_property_unchecked(conn, 0, event->requestor, event->property, utf, 0, UINT32_MAX);
+      cookie = xcb_get_property_unchecked(conn, 0, event->requestor, event->property, XCB_GET_PROPERTY_TYPE_ANY, 0, UINT32_MAX);
       reply = xcb_get_property_reply(conn, cookie, 0);   
       void * value = xcb_get_property_value(reply);
       
       xcb_delete_property(conn, event->requestor, event->property);
-
       if (reply && value) {
         data = malloc(reply->value_len+1);
         snprintf(data, reply->value_len+1, "%s", (char * )value);
@@ -392,8 +388,11 @@ char *get_clip_selection(int wid, char * selection) {
 
       free(e);
       free(reply);
+      xcb_flush(conn);
+      xcb_destroy_window(conn, clip_wid);
       return data; 
     } else {
+      xcb_destroy_window(conn, clip_wid);
       return data;
     }
   }
@@ -409,10 +408,15 @@ void set_clip_selection(int wid, char * selection, const char * buf) {
   pid_t clip_pid = fork();
   /* If error, exit would unmount the fuse system */
   if (clip_pid == 0) {
-
+    
+    /* Set up our data */
+    char * data = 0;
+    data = malloc(sizeof(buf)+1);
+    memcpy(data, (const void*)buf, sizeof(buf));
+    
     /* set up window */
     xcb_window_t clip_wid = create_clip_window();
-  
+
     /* request ownership */
     xcb_atom_t xsel = xcb_atom_get(conn, selection);
     xcb_get_selection_owner_reply_t *owner;
@@ -429,28 +433,40 @@ void set_clip_selection(int wid, char * selection, const char * buf) {
       
       if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_SELECTION_REQUEST) {
         xcb_selection_request_event_t * ev = (xcb_selection_request_event_t*)e;
-  	    /* selection, target, and property members should be set to values received in the selection request event */
-  	    
-        /* property set to none if the conversion couldn't be made */
-        xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property, xcb_atom_get(conn, "UTF8_STRING"), 32, strlen(buf), buf);
-  	    /* Owner should watch the events in requestors `subscribe(wid of requestor)` for notify property events, to make sure that the property was deleted */
-        xcb_flush(conn);
         free(e);
-        //break;
+  	    xcb_atom_t utf = xcb_atom_get(conn, "UTF8_STRING");
+        xcb_atom_t str = xcb_atom_get(conn, "STRING");
+        if (ev->target == utf) {
+          xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property, utf, 8, sizeof(data), data);
+        } else if (ev->target == str) {
+          xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property, str, 8, sizeof(data), data);
+        } else if (ev->target == xcb_atom_get(conn, "TIMESTAMP")) { 
+          xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->requestor, ev->property, xcb_atom_get(conn, "INTEGER"), 32, sizeof(ev->time), (const char *)ev->time);
+        }
+        xcb_flush(conn);
+        xcb_send_event(conn, 0, ev->requestor, XCB_EVENT_MASK_NO_EVENT, (char*) &ev);
+        free(e); free(ev);
       }
   
       if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_SELECTION_CLEAR) {
-        // once the clip ownership is changed, we can exit.  
-  	    /* Selectionclear event is received after something else becomes owner */
-  	    /* Owner of selection should send selectionnotify with xsendevent, with an event_mask of 0 */
-        break;
+        xcb_selection_clear_event_t *ev = (xcb_selection_clear_event_t*)e;
+        free(e);
+        if (ev->selection == xsel)
+          break;
+      }
+    
+      if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_PROPERTY_NOTIFY) {
+        //xcb_property_notify_event_t *ev = (xcb_property_notify_event_t*)e;
+        //if (ev->state != XCB_PROPERTY_DELETE) { 
+          //free(e); free(ev);
+        //}
+        /* INCR stuff here! */
       }
 
-      //if(XCB_EVENT_RESPONSE_TYPE(e) == XCB_PROPERTY_NOTIFY)
-        //break;
 
       free(e);
     }
-  _exit(0);
+    xcb_destroy_window(conn, clip_wid);
+    _exit(0);
   }
 }
