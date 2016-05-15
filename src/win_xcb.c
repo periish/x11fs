@@ -508,7 +508,7 @@ void set_clip_selection(int wid, char * selection, const char * buf) {
         free(e);
         if (ev->state == XCB_PROPERTY_DELETE) { 
           syslog(LOG_ERR, "This is a delete event\n");
-          xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->window, ev->atom, xsel, utf, 0, (const void *)0); 
+          xcb_change_property(conn, XCB_PROP_MODE_REPLACE, ev->window, ev->atom, utf, 8, 0, (const void *)0); 
           xcb_flush(conn);
           free(ev);
         }
