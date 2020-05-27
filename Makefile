@@ -1,10 +1,10 @@
-CC=cc
+CC=?cc
 LD=$(CC)
 
 LIBS=`pkg-config fuse --libs` `pkg-config xcb --libs` `pkg-config xcb-icccm --libs`
 CFLAGS=-Wall -std=gnu11 -c `pkg-config fuse --cflags` `pkg-config xcb --cflags`
 
-PREFIX?=/usr
+PREFIX?=/usr/local
 
 SRCDIR=src
 OBJDIR=obj
@@ -16,10 +16,10 @@ OBJ := $(SRC:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 all: x11fs
 
 $(OBJDIR):
-	mkdir $(OBJDIR)
+	mkdir -p $(OBJDIR)
 
 $(BINDIR):
-	mkdir $(BINDIR)
+	mkdir -p $(BINDIR)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(wildcard $(SRCDIR)/*.h) $(OBJDIR)
 	$(CC) $(CFLAGS) -o $@ $<
@@ -32,8 +32,8 @@ install: x11fs
 	cp $(BINDIR)/x11fs $(DESTDIR)$(PREFIX)/bin/
 
 uninstall:
-	rm $(DESTDIR)$(PREFIX)/bin/x11fs
+	rm -f $(DESTDIR)$(PREFIX)/bin/x11fs
 
 clean:
-	rm $(OBJDIR)/*.o
-	rm $(BINDIR)/x11fs
+	rm -f $(OBJDIR)/*.o
+	rm -f $(BINDIR)/x11fs
