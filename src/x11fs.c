@@ -1,4 +1,4 @@
-#define FUSE_USE_VERSION 26
+#define FUSE_USE_VERSION 33
 
 #include <stdio.h>
 #include <fuse.h>
@@ -51,7 +51,7 @@ static const struct x11fs_file x11fs_files[] = {
 //Pull out the id of a window from a path
 static int get_winid(const char *path)
 {
-	int wid = -1;
+	unsigned int wid = -1;
 	//Check if the path is to a window directory or it's contents
 	if(!strncmp(path, "/0x", 3) && sscanf(path, "/0x%08x", &wid) != 1){
 		wid = 0;
@@ -67,14 +67,14 @@ static void x11fs_destroy()
 }
 
 //Doesn't actually do anything but it's required we implement this as it will get called when writing a value to a file that's shorter than the current contents
-static int x11fs_truncate(const char *path, off_t size)
+static int x11fs_truncate(const char *path, off_t size, struct fuse_file_info * file_info)
 {
 	return 0;
 }
 
 
 //Gives information about a file
-static int x11fs_getattr(const char *path, struct stat *stbuf)
+static int x11fs_getattr(const char *path, struct stat *stbuf, struct fuse_file_info * file_info)
 {
 	//zero the information about the file
 	memset(stbuf, 0, sizeof(struct stat));
@@ -173,7 +173,7 @@ static int x11fs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, of
 						win_string = malloc(sizeof(char)*(WID_STRING_LENGTH));
 						sprintf(win_string, "0x%08x", win);
 
-						filler(buf, win_string, NULL, 0);
+						filler(buf, win_string, NULL, 0, 0);
 
 						free(win_string);
 					}
@@ -182,7 +182,7 @@ static int x11fs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, of
 				}
 				//Otherwise just add the file to our directory listing
 				else
-					filler(buf, matchpath+len+1, NULL, 0);
+					filler(buf, matchpath+len+1, NULL, 0, 0);
 			}
 		}
 		free(matchpath);
@@ -193,8 +193,8 @@ static int x11fs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, of
 
 	//Add any extra needed elements to the directory list
 	if(dir){
-		filler(buf, ".", NULL, 0);
-		filler(buf, "..", NULL, 0);
+		filler(buf, ".", NULL, 0, 0);
+		filler(buf, "..", NULL, 0, 0);
 	}else
 		return -ENOTDIR;
 
@@ -266,7 +266,7 @@ static int x11fs_read(const char *path, char *buf, size_t size, off_t offset, st
 }
 
 //Write to a file
-static int x11fs_write(const char *path, const char *buf, size_t size, off_t offset,  struct fuse_file_info *fi)
+static int x11fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	//Iterate through our layout
 	size_t files_length = sizeof(x11fs_files)/sizeof(struct x11fs_file);

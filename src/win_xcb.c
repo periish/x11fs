@@ -66,7 +66,7 @@ int *list_windows()
 	int *win_list = malloc(sizeof(int)*(tree_r->children_len+1));
 	int i;
 	for (i=0; i<tree_r->children_len; i++) {
-		 win_list[i] = xcb_win_list[i];
+		win_list[i] = xcb_win_list[i];
 	}
 
 	free(tree_r);
@@ -170,15 +170,15 @@ void set_##name(int wid, int arg) {\
 	xcb_flush(conn);\
 }
 
-DEFINE_NORM_SETTER(border_width, xcb_configure_window,         XCB_CONFIG_WINDOW_BORDER_WIDTH);
-DEFINE_NORM_SETTER(border_color, xcb_change_window_attributes, XCB_CW_BORDER_PIXEL);
-DEFINE_NORM_SETTER(ignored,      xcb_change_window_attributes, XCB_CW_OVERRIDE_REDIRECT);
-DEFINE_NORM_SETTER(width,        xcb_configure_window,         XCB_CONFIG_WINDOW_WIDTH);
-DEFINE_NORM_SETTER(height,       xcb_configure_window,         XCB_CONFIG_WINDOW_HEIGHT);
-DEFINE_NORM_SETTER(x,            xcb_configure_window,         XCB_CONFIG_WINDOW_X);
-DEFINE_NORM_SETTER(y,            xcb_configure_window,         XCB_CONFIG_WINDOW_Y);
-DEFINE_NORM_SETTER(stack_mode,   xcb_configure_window,         XCB_CONFIG_WINDOW_STACK_MODE);
-DEFINE_NORM_SETTER(subscription, xcb_change_window_attributes, XCB_CW_EVENT_MASK);
+DEFINE_NORM_SETTER(border_width, xcb_configure_window,         XCB_CONFIG_WINDOW_BORDER_WIDTH)
+DEFINE_NORM_SETTER(border_color, xcb_change_window_attributes, XCB_CW_BORDER_PIXEL)
+DEFINE_NORM_SETTER(ignored,      xcb_change_window_attributes, XCB_CW_OVERRIDE_REDIRECT)
+DEFINE_NORM_SETTER(width,        xcb_configure_window,         XCB_CONFIG_WINDOW_WIDTH)
+DEFINE_NORM_SETTER(height,       xcb_configure_window,         XCB_CONFIG_WINDOW_HEIGHT)
+DEFINE_NORM_SETTER(x,            xcb_configure_window,         XCB_CONFIG_WINDOW_X)
+DEFINE_NORM_SETTER(y,            xcb_configure_window,         XCB_CONFIG_WINDOW_Y)
+DEFINE_NORM_SETTER(stack_mode,   xcb_configure_window,         XCB_CONFIG_WINDOW_STACK_MODE)
+DEFINE_NORM_SETTER(subscription, xcb_change_window_attributes, XCB_CW_EVENT_MASK)
 
 #define DEFINE_GEOM_GETTER(name) \
 int get_##name(int wid)\
@@ -194,11 +194,11 @@ int get_##name(int wid)\
 	return name;\
 }
 
-DEFINE_GEOM_GETTER(width);
-DEFINE_GEOM_GETTER(height);
-DEFINE_GEOM_GETTER(x);
-DEFINE_GEOM_GETTER(y);
-DEFINE_GEOM_GETTER(border_width);
+DEFINE_GEOM_GETTER(width)
+DEFINE_GEOM_GETTER(height)
+DEFINE_GEOM_GETTER(x)
+DEFINE_GEOM_GETTER(y)
+DEFINE_GEOM_GETTER(border_width)
 
 int get_mapped(int wid)
 {
