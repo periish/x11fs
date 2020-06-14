@@ -318,8 +318,8 @@ char *get_events(){
 		}
 
 		if ( ev_id ) {
-			event_string = malloc(snprintf(NULL, 0, "%s: 0x%08x\n", ev_id, wid) + 1);
-			sprintf(event_string, "%s: 0x%08x\n", ev_id, wid);
+			event_string = malloc(snprintf(NULL, 0, "%s 0x%08x\n", ev_id, wid) + 1);
+			sprintf(event_string, "%s 0x%08x\n", ev_id, wid);
 			done = true;
 		}
 	}
