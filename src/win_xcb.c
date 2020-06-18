@@ -170,6 +170,35 @@ void set_##name(int wid, int arg) {\
 	xcb_flush(conn);\
 }
 
+void set_size(int wid, int width, int height) {
+	uint16_t mask = 0;
+	mask |= XCB_CONFIG_WINDOW_WIDTH;
+	mask |= XCB_CONFIG_WINDOW_HEIGHT;
+	uint32_t values[] = {width, height};
+	xcb_configure_window(conn, wid, mask, values);
+	xcb_flush(conn);
+}
+
+void set_position(int wid, int x, int y) {
+	uint16_t mask = 0;
+	mask |= XCB_CONFIG_WINDOW_X;
+	mask |= XCB_CONFIG_WINDOW_Y;
+	uint32_t values[] = {x, y};
+	xcb_configure_window(conn, wid, mask, values);
+	xcb_flush(conn);
+}
+
+void set_all_geometry(int wid, int width, int height, int x, int y) {
+	uint16_t mask = 0;
+	mask |= XCB_CONFIG_WINDOW_X;
+	mask |= XCB_CONFIG_WINDOW_Y;
+	mask |= XCB_CONFIG_WINDOW_WIDTH;
+	mask |= XCB_CONFIG_WINDOW_HEIGHT;
+	uint32_t values[] = {x, y, width, height};
+	xcb_configure_window(conn, wid, mask, values);
+	xcb_flush(conn);
+}
+
 DEFINE_NORM_SETTER(border_width, xcb_configure_window,         XCB_CONFIG_WINDOW_BORDER_WIDTH)
 DEFINE_NORM_SETTER(border_color, xcb_change_window_attributes, XCB_CW_BORDER_PIXEL)
 DEFINE_NORM_SETTER(ignored,      xcb_change_window_attributes, XCB_CW_OVERRIDE_REDIRECT)
@@ -318,8 +347,8 @@ char *get_events(){
 		}
 
 		if ( ev_id ) {
-			event_string = malloc(snprintf(NULL, 0, "%s: 0x%08x\n", ev_id, wid) + 1);
-			sprintf(event_string, "%s: 0x%08x\n", ev_id, wid);
+			event_string = malloc(snprintf(NULL, 0, "%s 0x%08x\n", ev_id, wid) + 1);
+			sprintf(event_string, "%s 0x%08x\n", ev_id, wid);
 			done = true;
 		}
 	}

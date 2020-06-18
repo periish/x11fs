@@ -43,6 +43,12 @@ char *root_height_read(int wid)
 	return geometry_height_read(-1);
 }
 
+char *root_size_read(int wid)
+{
+	(void) wid;
+	return geometry_size_read(-1);
+}
+
 char *geometry_width_read(int wid)
 {
 	int width=get_width(wid);
@@ -79,6 +85,38 @@ void geometry_height_write(int wid, const char *buf)
 	set_height(wid, atoi(buf));
 }
 
+char *geometry_size_read(int wid)
+{
+	int width=get_width(wid);
+	if(width==-1){
+		errno = -EIO;
+		return NULL;
+	}
+
+	int height=get_height(wid);
+	if(height==-1){
+		errno = -EIO;
+		return NULL;
+	}
+
+	char *size_string=malloc(snprintf(NULL, 0, "%d %d\n", width, height)+1);
+	sprintf(size_string, "%d %d\n", width, height);
+	return size_string;
+}
+
+void geometry_size_write(int wid, const char *buf)
+{
+	char *str = strdup(buf);
+	char *token = strtok(str, " ");
+	int width = token ? atoi(token) : 0;
+
+	token = strtok(NULL, " ");
+	int height = token ? atoi(token) : 0;
+
+	set_size(wid, width, height);
+	free(str);
+}
+
 char *geometry_x_read(int wid)
 {
     int x=get_x(wid);
@@ -113,6 +151,88 @@ char *geometry_y_read(int wid)
 void geometry_y_write(int wid, const char *buf)
 {
 	set_y(wid, atoi(buf));
+}
+
+char *geometry_pos_read(int wid)
+{
+	int x=get_x(wid);
+	if(x==-1){
+		errno = -EIO;
+		return NULL;
+	}
+
+	int y=get_y(wid);
+	if(y==-1){
+		errno = -EIO;
+		return NULL;
+	}
+
+	char *position_string=malloc(snprintf(NULL, 0, "%d %d\n", x, y)+1);
+	sprintf(position_string, "%d %d\n", x, y);
+	return position_string;
+}
+
+void geometry_pos_write(int wid, const char *buf)
+{
+	char *str = strdup(buf);
+	char *token = strtok(str, " ");
+	int x = token ? atoi(token) : 0;
+
+	token = strtok(NULL, " ");
+	int y = token ? atoi(token) : 0;
+
+	set_position(wid, x, y);
+	free(str);
+}
+
+char *geometry_all_read(int wid)
+{
+	int width=get_width(wid);
+	if(width==-1){
+		errno = -EIO;
+		return NULL;
+	}
+
+	int height=get_height(wid);
+	if(height==-1){
+		errno = -EIO;
+		return NULL;
+	}
+
+	int x=get_x(wid);
+	if(x==-1){
+		errno = -EIO;
+		return NULL;
+	}
+
+	int y=get_y(wid);
+	if(y==-1){
+		errno = -EIO;
+		return NULL;
+	}
+
+	char *all_string=malloc(snprintf(NULL, 0, "%d %d %d %d\n", width, height, x, y)+1);
+	sprintf(all_string, "%d %d %d %d\n", width, height, x, y);
+	return all_string;
+}
+
+void geometry_all_write(int wid, const char *buf)
+{
+	char *str = strdup(buf);
+	char *token = strtok(str, " ");
+	int width = token ? atoi(token) : 0;
+
+	token = strtok(NULL, " ");
+	int height = token ? atoi(token) : 0;
+
+	token = strtok(NULL, " ");
+	int x = token ? atoi(token) : 0;
+
+	token = strtok(NULL, " ");
+	int y = token ? atoi(token) : 0;
+
+	set_all_geometry(wid, width, height, x, y);
+	free(str);
 }
 
 char *mapped_read(int wid)
