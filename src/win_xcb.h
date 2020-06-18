@@ -19,11 +19,17 @@ void set_width(int wid, int width);
 int get_height(int wid);
 void set_height(int wid, int height);
 
+void set_size(int wid, int width, int height);
+
 int get_x(int wid);
 void set_x(int wid, int x);
 
 int get_y(int wid);
 void set_y(int wid, int y);
+
+void set_position(int wid, int x, int y);
+
+void set_all_geometry(int wid, int x, int y, int width, int height);
 
 int get_border_width(int wid);
 void set_border_width(int wid, int width);
