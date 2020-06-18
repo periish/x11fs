@@ -1,0 +1,15 @@
+#!/bin/sh -e
+
+is_ignored () {
+    read -r status < $X11FS/$1/ignored
+    case $status in
+        true)  return 0 ;;
+        false) return 1 ;;
+    esac
+}
+
+cat $X11FS/event | while read -r ev wid; do
+    case $ev in
+        CREATE|MAP|ENTER) is_ignored "$wid" || echo "$wid" > $X11FS/focused
+    esac
+done

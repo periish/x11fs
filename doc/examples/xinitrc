@@ -1,0 +1,7 @@
+#!/bin/sh
+
+export X11FS=<your mointpoint here>
+x11fs $X11FS
+sxhkd &
+focuser
+fusermount3 -u $X11FS

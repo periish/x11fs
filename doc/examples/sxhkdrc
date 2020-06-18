@@ -1,0 +1,33 @@
+# Open a terminal.
+
+super + Return
+    urxvt
+
+# Move windows
+
+super + {h,l}
+    read -r WID < $X11FS/focused; \
+    read -r POS < $X11FS/$WID/geometry/x; \
+    echo "$(( POS {+,-} 6 ))" > $X11FS/$WID/geometry/x
+super + {j,k}
+    read -r WID < $X11FS/focused; \
+    read -r POS < $X11FS/$WID/geometry/y; \
+    echo "$(( POS {+,-} 6 ))" > $X11FS/$WID/geometry/y
+
+# Resize windows
+
+super + shift + {h,l}
+    read -r WID < $X11FS/focused; \
+    read -r POS < $X11FS/$WID/geometry/height; \
+    echo "$(( POS {+,-} 6 ))" > $X11FS/$WID/geometry/height
+super + shift + {j,k}
+    read -r WID < $X11FS/focused; \
+    read -r POS < $X11FS/$WID/geometry/width; \
+    echo "$(( POS {+,-} 6 ))" > $X11FS/$WID/geometry/width
+
+# Kill focused window
+super + q
+    read -r WID < $X11FS/focused; \
+    rm -r $X11FS/$WID
+super + Esacpe
+    pkill focuser
